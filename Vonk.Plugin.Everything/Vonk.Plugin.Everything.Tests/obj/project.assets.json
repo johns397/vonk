@@ -10047,38 +10047,31 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\usd03057\\.nuget\\packages\\": {},
-    "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder": {}
+    "/Users/rctv/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\git\\Vonk\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything.Tests\\Vonk.Plugin.Everything.Tests.csproj",
+      "projectUniqueName": "/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything.Tests/Vonk.Plugin.Everything.Tests.csproj",
       "projectName": "Vonk.Plugin.Everything.Tests",
-      "projectPath": "C:\\git\\Vonk\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything.Tests\\Vonk.Plugin.Everything.Tests.csproj",
-      "packagesPath": "C:\\Users\\usd03057\\.nuget\\packages\\",
-      "outputPath": "C:\\git\\Vonk\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything.Tests\\obj\\",
+      "projectPath": "/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything.Tests/Vonk.Plugin.Everything.Tests.csproj",
+      "packagesPath": "/Users/rctv/.nuget/packages/",
+      "outputPath": "/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything.Tests/obj/",
       "projectStyle": "PackageReference",
-      "fallbackFolders": [
-        "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
-      ],
       "configFilePaths": [
-        "C:\\Users\\usd03057\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "/Users/rctv/.config/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "netcoreapp3.1"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-        "C:\\git\\NGCAP\\lib": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "netcoreapp3.1": {
           "projectReferences": {
-            "C:\\git\\Vonk\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything.csproj": {
-              "projectPath": "C:\\git\\Vonk\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything\\Vonk.Plugin.Everything.csproj"
+            "/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/Vonk.Plugin.Everything.csproj": {
+              "projectPath": "/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/Vonk.Plugin.Everything.csproj"
             }
           }
         }
@@ -10134,7 +10127,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.1.201\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/3.1.200/RuntimeIdentifierGraph.json"
       }
     }
   }

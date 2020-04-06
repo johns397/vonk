@@ -1,0 +1,8 @@
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/bin/Debug/netcoreapp3.1/Vonk.Plugin.Everything.deps.json
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/bin/Debug/netcoreapp3.1/Vonk.Plugin.Everything.dll
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/bin/Debug/netcoreapp3.1/Vonk.Plugin.Everything.pdb
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/obj/Debug/netcoreapp3.1/Vonk.Plugin.Everything.csproj.CoreCompileInputs.cache
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/obj/Debug/netcoreapp3.1/Vonk.Plugin.Everything.AssemblyInfoInputs.cache
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/obj/Debug/netcoreapp3.1/Vonk.Plugin.Everything.AssemblyInfo.cs
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/obj/Debug/netcoreapp3.1/Vonk.Plugin.Everything.dll
+/Users/rctv/Documents/vonk/Vonk.Plugin.Everything/Vonk.Plugin.Everything/obj/Debug/netcoreapp3.1/Vonk.Plugin.Everything.pdb
