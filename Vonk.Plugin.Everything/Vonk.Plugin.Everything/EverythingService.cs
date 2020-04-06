@@ -49,31 +49,6 @@ namespace Vonk.Plugin.EverythingOperation
             await EverytingBundle(vonkContext, patientID);
         }
 
-        public async Task PatientTypePOST(IVonkContext context)
-        {
-            var (request, _, response) = context.Parts();
-            if (request.GetRequiredPayload(response, out var payload))
-            {
-                var parameters = payload.ToTypedElement(_schemaProvider);
-                var nameParameter = parameters.Select("children().where($this.name = 'id')").FirstOrDefault();
-
-                var compositionID = nameParameter?.ChildString("value");
-                if (string.IsNullOrEmpty(compositionID))
-                {
-                    response.HttpResult = StatusCodes.Status400BadRequest;
-                    response.Outcome.AddIssue(VonkIssue.INVALID_REQUEST, "Parameter 'id' is missing.");
-                    return;
-                }
-                if (!Uri.TryCreate(compositionID, UriKind.Relative, out var uri))
-                {
-                    response.HttpResult = StatusCodes.Status501NotImplemented;
-                    response.Outcome.AddIssue(VonkIssue.NOT_IMPLEMENTED, "Parameter 'id' is an absolute url, which is not supported.");
-                    return;
-                }
-                await EverytingBundle(context, compositionID);
-            }
-        }
-
         /// <summary>
         /// Create a new FHIR Search bundle: add the Patient resource as a match, as $everything is a search operation.
         /// Additionally, include all resources found through references in the Patient resource.

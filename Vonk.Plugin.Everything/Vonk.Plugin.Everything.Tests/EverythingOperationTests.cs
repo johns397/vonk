@@ -20,7 +20,7 @@ using Task = System.Threading.Tasks.Task;
 namespace Vonk.Plugin.EverythingOperation.Test
 {
     /*   $everything unit tests:
-            - (X) $everything should return HTTP 200 and a valid FHIR patient (GET & POST)
+            - (X) $everything should return HTTP 200 and a valid FHIR patient (GET)
             - (X) $everything should return HTTP 404 when being called on a missing patient         
             - (X) $everything should persist the generated patient on request
             - (X) $everything should return an INVALID_REQUEST when being called with POST and an missing id
@@ -68,71 +68,6 @@ namespace Vonk.Plugin.EverythingOperation.Test
             testContext.Response.Payload.Should().NotBeNull();
             var bundleType = testContext.Response.Payload.SelectText("type");
             bundleType.Should().Be("searchset", "Bundle.type should be set to 'searchset'");
-        }
-
-        [Fact]
-        public async Task EverythingOperationPOSTReturn200OnSuccess()
-        {
-            // Setup Composition resource
-            var patient = CreateTestPatientNoReferences();
-            var patientId = "test";
-            var searchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
-            _searchMock.Setup(repo => repo.Search(
-                                      It.Is<IArgumentCollection>(args => args.GetArgument(ArgumentNames.resourceId).ArgumentValue == patientId),
-                                      It.IsAny<SearchOptions>())).ReturnsAsync(searchResult);
-
-            // Create VonkContext for $everything (POST / Type level)
-            var testContext = new VonkTestContext(VonkInteraction.instance_custom);
-            testContext.Arguments.AddArguments(new[]
-            {
-                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient")
-            });
-            testContext.TestRequest.CustomOperation = "everything";
-            testContext.TestRequest.Method = "POST";
-
-            var parameters = new Parameters();
-            var idValue = new FhirUri(patientId);
-            var parameterComponent = new Parameters.ParameterComponent { Name = "id" };
-            parameterComponent.Value = idValue;
-            parameters.Parameter.Add(parameterComponent);
-
-            testContext.TestRequest.Payload = new RequestPayload(true, parameters.ToIResource());
-
-            // Execute $everything
-            await _everythingService.PatientTypePOST(testContext);
-
-            // Check response status
-            testContext.Response.HttpResult.Should().Be(StatusCodes.Status200OK, "$everything should succeed with HTTP 200 - OK on test patient");
-            testContext.Response.Payload.Should().NotBeNull();
-            var bundleType = testContext.Response.Payload.SelectText("type");
-            bundleType.Should().Be("searchset", "Bundle.type should be set to 'searchset'");
-        }
-
-        [Fact]
-        public async Task EverythingperationPOSTReturn400OnMissingId()
-        {
-            // Setup Composition resource
-            var patient = CreateTestPatientNoReferences();
-            var searchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
-            _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(searchResult);
-
-            // Create VonkContext for $everything (POST / Type level)
-            var testContext = new VonkTestContext(VonkInteraction.instance_custom);
-            testContext.Arguments.AddArguments(new[]
-            {
-                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient")
-            });
-            testContext.TestRequest.CustomOperation = "everything";
-            testContext.TestRequest.Method = "POST";
-            testContext.TestRequest.Payload = new RequestPayload(true, new Parameters().ToIResource()); // Call with empty parameters
-
-            // Execute $everything
-            await _everythingService.PatientTypePOST(testContext);
-
-            // Check response status
-            testContext.Response.HttpResult.Should().Be(StatusCodes.Status400BadRequest, "$everything should fail with HTTP 400 - Bad request if Parameters resource does not contain an id");
-            testContext.Response.Outcome.Should().NotBeNull("At least one OperationOutcome should be returned");
-            testContext.Response.Outcome.Issues.Should().Contain(issue => issue.IssueType.Equals(VonkOutcome.IssueType.Invalid), "Request should be rejected as an invalid request");
         }
 
         [Fact]
@@ -191,7 +126,7 @@ namespace Vonk.Plugin.EverythingOperation.Test
             var resourceToBeFound = new List<string> { "Organization" };
 
             // Setup Patient resource
-            var patient = CreateTestPatientIncOOrganization(); // Unresolvable reference (organization resource) in the patient resource (1. level)
+            var patient = CreateTestPatientIncOrganization(); // Unresolvable reference (organization resource) in the patient resource (1. level)
             var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
             Patient pat = patient as Patient;
             //var patString = FhirAsJsonString(pat);
@@ -223,7 +158,7 @@ namespace Vonk.Plugin.EverythingOperation.Test
             var resourceToBeFound = new List<string> { "Composition", "Patient" };
 
             // Setup Composition resource
-            var composition = CreateTestPatientIncOOrganization(); // Unresolvable reference (Practitioner resource) in patient resource (2. level)
+            var composition = CreateTestPatientIncOrganization(); // Unresolvable reference (Practitioner resource) in patient resource (2. level)
             var compositionSearchResult = new SearchResult(new List<IResource>() { composition }, 1, 1);
 
             var patient = CreateTestPatient();
@@ -395,7 +330,7 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Composition() { Id = "test", VersionId = "v1", Subject = new ResourceReference("https://vonk.fire.ly/Patient/test") }.ToIResource();
         }
 
-        private IResource CreateTestPatientIncOOrganization()
+        private IResource CreateTestPatientIncOrganization()
         {
             return new Patient() { Id = "test", VersionId = "v1", ManagingOrganization = new ResourceReference("Organization/org1") }.ToIResource();
         }

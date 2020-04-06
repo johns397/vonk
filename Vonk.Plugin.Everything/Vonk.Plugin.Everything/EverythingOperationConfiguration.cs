@@ -31,13 +31,6 @@ namespace Vonk.Plugin.EverythingOperation
                 .HandleAsyncWith<EverythingService>((svc, context)
                     => svc.PatientInstanceGET(context));
 
-            builder
-                .OnCustomInteraction(VonkInteraction.type_custom, "everything")
-                .AndResourceTypes(new[] { "Patient" })
-                .AndMethod("POST")
-                .HandleAsyncWith<EverythingService>((svc, context)
-                    => svc.PatientTypePOST(context));
-
             return builder;
         }
     }
