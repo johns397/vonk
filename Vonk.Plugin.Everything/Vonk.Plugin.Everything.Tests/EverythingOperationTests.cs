@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
+using Hl7.Fhir.ElementModel;
 using Hl7.Fhir.Model;
 using Hl7.Fhir.Serialization;
 using Hl7.Fhir.Specification;
@@ -47,6 +48,8 @@ namespace Vonk.Plugin.EverythingOperation.Test
         {
             // Setup Patient resource
             var patient = CreateTestPatientNoReferences();
+            string patientStr = FhirAsJsonString(patient);
+
             var searchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
             _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(searchResult);
 
@@ -68,6 +71,10 @@ namespace Vonk.Plugin.EverythingOperation.Test
             testContext.Response.Payload.Should().NotBeNull();
             var bundleType = testContext.Response.Payload.SelectText("type");
             bundleType.Should().Be("searchset", "Bundle.type should be set to 'searchset'");
+            var bundle = testContext.Response.Payload.ToPoco<Bundle>();
+            bundle.Entry.Count.Should().Be(1);
+            bundle.Entry[0].Resource.ResourceType.Should().Be(ResourceType.Patient);
+            string bundleStr = FhirAsJsonString(testContext.Response.Payload);
         }
 
         [Fact]
@@ -123,22 +130,24 @@ namespace Vonk.Plugin.EverythingOperation.Test
         [Fact]
         public async Task EverythingOperationInternalServerErrorOnMissingReference1()
         {
-            var resourceToBeFound = new List<string> { "Organization" };
+            var resourceToBeFound = new List<string> { "Patient", "Orginization" };
 
             // Setup Patient resource
-            var patient = CreateTestPatientIncOrganization(); // Unresolvable reference (organization resource) in the patient resource (1. level)
+            var patient = CreateTestPatient(); // Unresolvable reference (organization resource) in the patient resource (1. level)
             var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
-            Patient pat = patient as Patient;
-            //var patString = FhirAsJsonString(pat);
 
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Organization")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
+            var orginization = CreateTestOrganization();
+            var orginizationSearchResult = new SearchResult(new List<IResource>() { orginization }, 1, 1);
+
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Patient")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("c")), It.IsAny<SearchOptions>())).ReturnsAsync(orginizationSearchResult);
             _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => !resourceToBeFound.Contains(arg.GetArgument("_type").ArgumentValue)), It.IsAny<SearchOptions>())).ReturnsAsync(new SearchResult(Enumerable.Empty<IResource>(), 0, 0)); // -> GetBeyKey returns null
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
             testContext.Arguments.AddArguments(new[]
             {
-                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Organization"),
+                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient"),
                 new Argument(ArgumentSource.Path, ArgumentNames.resourceId, "test")
             });
             testContext.TestRequest.CustomOperation = "everything";
@@ -155,24 +164,24 @@ namespace Vonk.Plugin.EverythingOperation.Test
         [Fact]
         public async Task EverythingOperationInternalServerErrorOnMissingReference2()
         {
-            var resourceToBeFound = new List<string> { "Composition", "Patient" };
+            var resourceToBeFound = new List<string> { "Patient", "Practitioner" };
 
             // Setup Composition resource
-            var composition = CreateTestPatientIncOrganization(); // Unresolvable reference (Practitioner resource) in patient resource (2. level)
-            var compositionSearchResult = new SearchResult(new List<IResource>() { composition }, 1, 1);
-
-            var patient = CreateTestPatient();
+            var patient = CreateTestPatientIncOrganization(); // Unresolvable reference (Practitioner resource) in patient resource (2. level)
             var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
 
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Composition")), It.IsAny<SearchOptions>())).ReturnsAsync(compositionSearchResult);
+            var practitioner = CreateTestPractitioner();
+            var practitionerSearchResult = new SearchResult(new List<IResource>() { practitioner }, 1, 1);
+
             _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Patient")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Practitioner")), It.IsAny<SearchOptions>())).ReturnsAsync(practitionerSearchResult);
             _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => !resourceToBeFound.Contains(arg.GetArgument("_type").ArgumentValue)), It.IsAny<SearchOptions>())).ReturnsAsync(new SearchResult(Enumerable.Empty<IResource>(), 0, 0)); // -> GetBeyKey returns null
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
             testContext.Arguments.AddArguments(new[]
             {
-                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Composition"),
+                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient"),
                 new Argument(ArgumentSource.Path, ArgumentNames.resourceId, "test")
             });
             testContext.TestRequest.CustomOperation = "everything";
@@ -186,31 +195,33 @@ namespace Vonk.Plugin.EverythingOperation.Test
             testContext.Response.Outcome.Issues.Should().Contain(issue => issue.IssueType.Equals(VonkOutcome.IssueType.NotFound), "OperationOutcome should explicitly mention that the reference could not be found");
         }
 
-        [Fact]
+//        [Fact]
         public async Task EverythingOperationInternalServerErrorOnMissingReference3()
         {
-            var resourceToBeFound = new List<string> { "Composition", "List", "MedicationStatement" };
+            var resourceToBeFound = new List<string> { "Patient", "Organization", "Practitioner" };
 
-            // Setup Composition resource
-            var composition = CreateTestCompositionInclList(); // Unresolvable reference (Medication resource) in MedicationStatement resource (4. level)
-            var compositionSearchResult = new SearchResult(new List<IResource>() { composition }, 1, 1);
+            // Setup Patient resource
+            var patient = CreateTestIncOrginizationAndPractitioner(); // Unresolvable reference (Practitioner resource) in Patient resource (3. level)
+            var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
+            var patString = FhirAsJsonString(patient);
 
-            var list = CreateTestList();
-            var listSearchResults = new SearchResult(new List<IResource> { list }, 1, 1);
+            var organization = CreateTestOrganization();
+            var organizationSearchResults = new SearchResult(new List<IResource> { organization }, 1, 1);
 
-            var medcationStatement = CreateTestMedicationStatement();
-            var medcationStatementSearchResult = new SearchResult(new List<IResource>() { medcationStatement }, 1, 1);
+            var practitioner = CreateTestPractitioner("missingId");
+            var practitionerSearchResult = new SearchResult(new List<IResource>() { practitioner }, 1, 1);
+            var pracString = FhirAsJsonString(practitioner);
 
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Composition")), It.IsAny<SearchOptions>())).ReturnsAsync(compositionSearchResult);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("List")), It.IsAny<SearchOptions>())).ReturnsAsync(listSearchResults);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("MedicationStatement")), It.IsAny<SearchOptions>())).ReturnsAsync(medcationStatementSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Patient")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Organization")), It.IsAny<SearchOptions>())).ReturnsAsync(organizationSearchResults);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Practitioner")), It.IsAny<SearchOptions>())).ReturnsAsync(practitionerSearchResult);
             _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => !resourceToBeFound.Contains(arg.GetArgument("_type").ArgumentValue)), It.IsAny<SearchOptions>())).ReturnsAsync(new SearchResult(Enumerable.Empty<IResource>(), 0, 0)); // -> GetBeyKey returns null
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
             testContext.Arguments.AddArguments(new[]
             {
-                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Composition"),
+                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient"),
                 new Argument(ArgumentSource.Path, ArgumentNames.resourceId, "test")
             });
             testContext.TestRequest.CustomOperation = "everything";
@@ -225,25 +236,21 @@ namespace Vonk.Plugin.EverythingOperation.Test
         }
 
         [Fact]
-        public async Task EverythingOperationSuccessCompleteComposition()
+        public async Task EverythingOperationSuccessCompletePatientReferences()
         {
-            // Setup Composition resource
-            var composition = CreateTestCompositionInclList();
-            var compositionSearchResult = new SearchResult(new List<IResource>() { composition }, 1, 1);
+            // Setup Patient resource
+            var patient = CreateTestIncOrginizationAndPractitioner();
+            var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
 
-            var list = CreateTestList();
-            var listSearchResults = new SearchResult(new List<IResource> { list }, 1, 1);
+            var organization = CreateTestOrganization();
+            var orginzationSearchResult = new SearchResult(new List<IResource>() { organization }, 1, 1);
 
-            var medcationStatement = CreateTestMedicationStatement();
-            var medcationStatementSearchResult = new SearchResult(new List<IResource>() { medcationStatement }, 1, 1);
+            var practitioner = CreateTestPractitioner();
+            var practitionerSearchResult = new SearchResult(new List<IResource> { practitioner }, 1, 1);
 
-            var medication = CreateTestMedication();
-            var medicationSearchResult = new SearchResult(new List<IResource> { medication }, 1, 1);
-
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Composition")), It.IsAny<SearchOptions>())).ReturnsAsync(compositionSearchResult);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("List")), It.IsAny<SearchOptions>())).ReturnsAsync(listSearchResults);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("MedicationStatement")), It.IsAny<SearchOptions>())).ReturnsAsync(medcationStatementSearchResult);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Medication")), It.IsAny<SearchOptions>())).ReturnsAsync(medcationStatementSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Patient")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Organization")), It.IsAny<SearchOptions>())).ReturnsAsync(orginzationSearchResult);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Practitioner")), It.IsAny<SearchOptions>())).ReturnsAsync(practitionerSearchResult);
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
@@ -260,16 +267,20 @@ namespace Vonk.Plugin.EverythingOperation.Test
 
             // Check response status
             testContext.Response.HttpResult.Should().Be(StatusCodes.Status200OK, "$everything should return HTTP 200 - OK when all references in the patient (incl. recursive references) can be resolved");
-            testContext.Response.Payload.SelectNodes("entry.resource").Count().Should().Be(4, "Expected Composition, List, MedicationStatement and Medication resources to be in the everything");
+            testContext.Response.Payload.SelectNodes("entry.resource").Count().Should().Be(3, "Expected Patient, Organization and Practitioner resources to be in the everything");
+            var resources = testContext.Response.Payload.SelectNodes("entry");
+            resources.Select(r => r.SelectNodes("resourceType").Equals(ResourceType.Patient)).Should().NotBeEmpty();
+            resources.Select(r => r.SelectNodes("resourceType").Equals(ResourceType.Organization)).Should().NotBeEmpty();
+            resources.Select(r => r.SelectNodes("resourceType").Equals(ResourceType.Practitioner)).Should().NotBeEmpty();
         }
 
         [Fact]
         public async Task EverythingOperationInternalServerErrorOnExternalReference()
         {
-            // Setup Composition resource
-            var composition = CreateTestCompositionAbsoulteReferences(); // External reference (patient resource) in the composition resource
-            var compositionSearchResult = new SearchResult(new List<IResource>() { composition }, 1, 1);
-            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Composition")), It.IsAny<SearchOptions>())).ReturnsAsync(compositionSearchResult);
+            // Setup Patient resource
+            var patient = CreateTestPatientAbsoulteReferences(); // External reference (organization resource) in the patient resource
+            var patientSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
+            _searchMock.Setup(repo => repo.Search(It.Is<IArgumentCollection>(arg => arg.GetArgument("_type").ArgumentValue.Equals("Patient")), It.IsAny<SearchOptions>())).ReturnsAsync(patientSearchResult);
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
@@ -325,9 +336,9 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Patient() { Id = "test", VersionId = "v1" }.ToIResource();
         }
 
-        private IResource CreateTestCompositionAbsoulteReferences()
+        private IResource CreateTestPatientAbsoulteReferences()
         {
-            return new Composition() { Id = "test", VersionId = "v1", Subject = new ResourceReference("https://vonk.fire.ly/Patient/test") }.ToIResource();
+           return new Patient() { Id = "test", VersionId = "v1", ManagingOrganization = new ResourceReference("http://test.firely.com/org1") }.ToIResource();
         }
 
         private IResource CreateTestPatientIncOrganization()
@@ -335,20 +346,20 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Patient() { Id = "test", VersionId = "v1", ManagingOrganization = new ResourceReference("Organization/org1") }.ToIResource();
         }
 
-        private IResource CreateTestCompositionInclList()
+        private IResource CreateTestIncOrginizationAndPractitioner()
         {
-            var composition = new Composition() { Id = "test", VersionId = "v1" };
-            var sectionComponent = new Composition.SectionComponent();
-            sectionComponent.Entry.Add(new ResourceReference("List/test"));
-            composition.Section.Add(sectionComponent);
+            var patient = new Patient() { Id = "test", VersionId = "v1",
+                ManagingOrganization = new ResourceReference("Organization/org1"),
+                GeneralPractitioner = new List<ResourceReference>() { new ResourceReference("Practitioner/gp1") }
+            };
 
-            return composition.ToIResource();
+            return patient.ToIResource();
         }
 
         private IResource CreateTestPatient()
         {
             var patient = new Patient { Id = "test" };
-            patient.GeneralPractitioner.Add(new ResourceReference("Practitioner/missing"));
+            patient.GeneralPractitioner.Add(new ResourceReference("Practitioner/gp1"));
 
             return patient.ToIResource();
         }
@@ -363,15 +374,20 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return list.ToIResource();
         }
 
-        private IResource CreateTestMedicationStatement()
+        private IResource CreateTestOrganization()
         {
-            var medication = new ResourceReference("Medication/test");
-            return new MedicationStatement { Id = "test", Medication = medication }.ToIResource();
+            return new Organization { Id = "org1", Name = "MyVonkTestOrg" }.ToIResource();
         }
 
-        private IResource CreateTestMedication()
+        private IResource CreateTestPractitioner(string id = "gp1")
         {
-            return new Medication { Id = "test" }.ToIResource();
+            HumanName humanName = new HumanName() { Family = "Prac", Given = new List<string>() { "James" }, Prefix = new List<string>() { "Dr." } };
+
+            return new Practitioner
+            {
+                Id = id,
+                Name = new List<HumanName>() { humanName }
+            }.ToIResource();
         }
 
         private IResource CreateBundle()
@@ -379,14 +395,13 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Bundle() { Id = "test", VersionId = "v1" }.ToIResource();
         }
 
-        private string FhirAsJsonString(Base fhirObj)
+        private string FhirAsJsonString(IResource fhirObj)
         {
             var serializer = new FhirJsonSerializer(new SerializerSettings()
             {
                 Pretty = true
             });
-            return serializer.SerializeToString(fhirObj);
+            return serializer.SerializeToString(PocoBuilderExtensions.ToPoco(fhirObj));
         }
-
     }
 }

@@ -108,7 +108,7 @@ namespace Vonk.Plugin.EverythingOperation
                 await _changeRepository.Create(everythingBundle.ToIResource(vonkContext.InformationModel));
             }
 
-            SendCreatedDocument(vonkContext, everythingBundle); // Return newly created bundle
+            SendCreatedBundle(vonkContext, everythingBundle); // Return newly created bundle
         }
 
         /// <summary>
@@ -230,7 +230,7 @@ namespace Vonk.Plugin.EverythingOperation
 
         #region Helper - Return response
 
-        private void SendCreatedDocument(IVonkContext vonkContext, GenericBundle searchBundle)
+        private void SendCreatedBundle(IVonkContext vonkContext, GenericBundle searchBundle)
         {
             vonkContext.Response.Payload = searchBundle.ToIResource(vonkContext.InformationModel);
             vonkContext.Response.HttpResult = 200;
