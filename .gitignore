@@ -1,6 +1,6 @@
-vonk_distribution/*
-*/.DS_Store
-obj/*
-bin/*
-xs/*
+vonk_distribution/
+**/.DS_Store
+obj/
+bin/
+xs/
 *.cache
