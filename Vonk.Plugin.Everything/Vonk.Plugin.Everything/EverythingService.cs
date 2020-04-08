@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Vonk.Core.Common;
 using Vonk.Core.Context;
 using Vonk.Core.ElementModel;
+using Vonk.Core.Metadata;
 using Vonk.Core.Repository;
 using Vonk.Core.Support;
 using static Vonk.Core.Context.VonkOutcome;
@@ -23,11 +24,13 @@ namespace Vonk.Plugin.EverythingOperation
         private readonly IResourceChangeRepository _changeRepository;
         private readonly IStructureDefinitionSummaryProvider _schemaProvider;
         private readonly ILogger<EverythingService> _logger;
+        private readonly IModelService _modelService;
 
         public EverythingService(ISearchRepository searchRepository,
             IResourceChangeRepository changeRepository,
             IStructureDefinitionSummaryProvider schemaProvider,
-            ILogger<EverythingService> logger)
+            ILogger<EverythingService> logger,
+            IModelService modelService)
         {
             Check.NotNull(searchRepository, nameof(searchRepository));
             Check.NotNull(changeRepository, nameof(changeRepository));
@@ -35,6 +38,7 @@ namespace Vonk.Plugin.EverythingOperation
             _searchRepository = searchRepository;
             _changeRepository = changeRepository;
             _schemaProvider = schemaProvider;
+            _modelService = modelService;
             _logger = logger;
         }
 
@@ -45,6 +49,7 @@ namespace Vonk.Plugin.EverythingOperation
         /// <returns></returns>
         public async Task PatientInstanceGET(IVonkContext vonkContext)
         {
+            var patientCompartment = _modelService.CompartmentDefinitions;
             var patientID = vonkContext.Arguments.ResourceIdArgument().ArgumentValue;
             await EverytingBundle(vonkContext, patientID);
         }

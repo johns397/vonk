@@ -11,6 +11,7 @@ using Moq;
 using Vonk.Core.Common;
 using Vonk.Core.Context;
 using Vonk.Core.ElementModel;
+using Vonk.Core.Metadata;
 using Vonk.Core.Repository;
 using Vonk.Fhir.R4;
 using Vonk.UnitTests.Framework.Helpers;
@@ -37,10 +38,11 @@ namespace Vonk.Plugin.EverythingOperation.Test
         private Mock<ISearchRepository> _searchMock = new Mock<ISearchRepository>();
         private Mock<IResourceChangeRepository> _changeMock = new Mock<IResourceChangeRepository>();
         private IStructureDefinitionSummaryProvider _schemaProvider = new PocoStructureDefinitionSummaryProvider();
+        private Mock<IModelService> _modelService = new Mock<IModelService>();
 
         public EverythingOperationTests()
         {
-            _everythingService = new EverythingService(_searchMock.Object, _changeMock.Object, _schemaProvider, _logger);
+            _everythingService = new EverythingService(_searchMock.Object, _changeMock.Object, _schemaProvider, _logger, _modelService.Object);
         }
 
         [Fact]
@@ -52,6 +54,8 @@ namespace Vonk.Plugin.EverythingOperation.Test
 
             var searchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
             _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(searchResult);
+
+            _modelService.Setup(model => model.CompartmentDefinitions.Select(c => c.CompartmentType.Equals(CompartmentType.Patient) ));
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);

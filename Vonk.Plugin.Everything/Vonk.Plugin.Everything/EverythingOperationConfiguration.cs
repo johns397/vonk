@@ -8,7 +8,7 @@ using Vonk.Core.Pluggability.ContextAware;
 
 namespace Vonk.Plugin.EverythingOperation
 {
-    [VonkConfiguration(order: 4900, isLicensedAs: "http://fire.ly/vonk/plugins/everything")]
+    [VonkConfiguration(order: 4950)]
     public static class EverythingOperationConfiguration
     {
         // Add services here to the DI system of ASP.NET Core
