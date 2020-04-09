@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Hl7.Fhir.ElementModel;
@@ -7,6 +8,7 @@ using Hl7.Fhir.Specification;
 using Hl7.FhirPath;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 using Vonk.Core.Common;
 using Vonk.Core.Context;
 using Vonk.Core.ElementModel;
@@ -25,6 +27,8 @@ namespace Vonk.Plugin.EverythingOperation
         private readonly IStructureDefinitionSummaryProvider _schemaProvider;
         private readonly ILogger<EverythingService> _logger;
         private readonly IModelService _modelService;
+        private readonly JObject _compartmentPatient;
+        private readonly List<JToken> _patientSearchList;
 
         public EverythingService(ISearchRepository searchRepository,
             IResourceChangeRepository changeRepository,
@@ -40,6 +44,10 @@ namespace Vonk.Plugin.EverythingOperation
             _schemaProvider = schemaProvider;
             _modelService = modelService;
             _logger = logger;
+
+            _compartmentPatient = JObject.Parse(File.ReadAllText(@"CompartmentPatientR4.json"));
+            _patientSearchList = _compartmentPatient.SelectTokens("$.resource[?(@.param)]").ToList<JToken>();
+
         }
 
         /// <summary>
@@ -49,9 +57,9 @@ namespace Vonk.Plugin.EverythingOperation
         /// <returns></returns>
         public async Task PatientInstanceGET(IVonkContext vonkContext)
         {
-            var patientCompartment = _modelService.CompartmentDefinitions;
             var patientID = vonkContext.Arguments.ResourceIdArgument().ArgumentValue;
-            await EverytingBundle(vonkContext, patientID);
+            await FindPatientReferencedResources(vonkContext, patientID);
+            //await EverythingBundle(vonkContext, patientID);
         }
 
         /// <summary>
@@ -61,7 +69,7 @@ namespace Vonk.Plugin.EverythingOperation
         /// </summary>
         /// <param name="vonkContext"></param>
         /// <returns></returns>
-        public async Task EverytingBundle(IVonkContext vonkContext, string patientID)
+        public async Task EverythingBundle(IVonkContext vonkContext, string patientID)
         {
             // Build empty everything result bundle
             var everythingBundle = CreateEmptyBundle();
@@ -81,8 +89,83 @@ namespace Vonk.Plugin.EverythingOperation
                 // Include Patient resource in search results
                 everythingBundle = everythingBundle.AddEntry(resolvedResource, "Patient/" + patientID);
 
-                // Recursively resolve and include all references in the search bundle, overwrite documentBundle as GenericBundle is immutable
+                // Recursively resolve and include all references in the search bundle, overwrite everythingBundle as GenericBundle is immutable
                 (_, everythingBundle, error) = await IncludeReferencesInBundle(resolvedResource, everythingBundle);
+            }
+
+            // Handle responses
+            if (!(error is null))
+            {
+                if (!patientResolved) // Patient resource, on which the operation is called, does not exist
+                {
+                    _logger.LogTrace("$everythingt called on non-existing Patient/{id}", patientID);
+                    CancelEverythingOperation(vonkContext, StatusCodes.Status404NotFound);
+                }
+                else if (error.Equals(VonkIssue.PROCESSING_ERROR))
+                {
+                    _logger.LogTrace("$everything failed to include resource in correct information model", patientID);
+                    CancelEverythingOperation(vonkContext, StatusCodes.Status415UnsupportedMediaType, error);
+                }
+                else // Local or external reference reference could not be found
+                {
+                    CancelEverythingOperation(vonkContext, StatusCodes.Status500InternalServerError, error);
+                }
+                return;
+            }
+
+            // Check if we need to persist the bundle
+            var persistArgument = vonkContext.Arguments.GetArgument("persist");
+            var userRequestedPersistOption = persistArgument == null ? String.Empty : persistArgument.ArgumentValue;
+            if (userRequestedPersistOption.Equals("true"))
+            {
+                await _changeRepository.Create(everythingBundle.ToIResource(vonkContext.InformationModel));
+            }
+
+            SendCreatedBundle(vonkContext, everythingBundle); // Return newly created bundle
+        }
+
+        private async Task FindPatientReferencedResources(IVonkContext vonkContext, string patientID)
+        {
+            // Build empty everything result bundle
+            var everythingBundle = CreateEmptyBundle();
+
+            vonkContext.Arguments.Handled(); // Signal to Vonk -> Mark arguments as "done"
+
+            // Get Patient resource
+            (var patientResolved, var resolvedResource, var error) = await ResolveResource(patientID, "Patient");
+            if (patientResolved)
+            {
+                if (resolvedResource.InformationModel != vonkContext.InformationModel)
+                {
+                    CancelEverythingOperation(vonkContext, StatusCodes.Status415UnsupportedMediaType, WrongInformationModel(vonkContext.InformationModel, resolvedResource));
+                    return;
+                }
+
+                // Include Patient resource in search results
+                everythingBundle = everythingBundle.AddEntry(resolvedResource, "Patient/" + patientID);
+
+                IEnumerable<IResource> resources = new List<IResource>();
+
+                foreach (var token in _patientSearchList)
+                {
+                    bool found = false;
+                    resources = new List<IResource>();
+
+                    var resourceName = token["code"].Value<string>();
+                    var param = token["param"].Values<string>();
+
+                    foreach (string propName in param)
+                    {
+                        (found, resources) = await ResourceHasPatientReference(vonkContext, resourceName, propName, patientID);
+                        Console.WriteLine($"Found: {found}, Count: {resources.Count()} resources for [Resource: {resourceName}, PropertyName: {propName} ");
+
+                        foreach (var resource in resources)
+                        {
+                            // add resources to bundle
+                            everythingBundle.Add(resource);
+                        }
+                    }
+                }
             }
 
             // Handle responses
@@ -127,7 +210,7 @@ namespace Vonk.Plugin.EverythingOperation
         /// - success describes if all references could recursively be found, starting from the given resource
         /// - failedReference contains the first reference that could not be resolved, empty if all resources can be resolved
         /// </returns>
-        private async Task<(bool success, GenericBundle documentBundle, VonkIssue error)> IncludeReferencesInBundle(IResource startResource, GenericBundle searchBundle)
+        private async Task<(bool success, GenericBundle everythingBundle, VonkIssue error)> IncludeReferencesInBundle(IResource startResource, GenericBundle searchBundle)
         {
             var includedReferences = new HashSet<string>();
             return await IncludeReferencesInBundle(startResource, searchBundle, includedReferences);
@@ -137,10 +220,10 @@ namespace Vonk.Plugin.EverythingOperation
         /// Overloaded method for recursive use.
         /// </summary>
         /// <param name="resource"></param>
-        /// <param name="documentBundle"></param>
+        /// <param name="everythingBundle"></param>
         /// <param name="includedReferences">Remember which resources were already added to the search bundle</param>
         /// <returns></returns>
-        private async Task<(bool success, GenericBundle documentBundle, VonkIssue error)> IncludeReferencesInBundle(IResource resource, GenericBundle documentBundle, HashSet<string> includedReferences)
+        private async Task<(bool success, GenericBundle everythingBundle, VonkIssue error)> IncludeReferencesInBundle(IResource resource, GenericBundle everythingBundle, HashSet<string> includedReferences)
         {
             // Get references of given resource
             var allReferencesInResourceQuery = "$this.descendants().where($this is Reference).reference";
@@ -161,10 +244,10 @@ namespace Vonk.Plugin.EverythingOperation
 
                         if(resource.InformationModel != resolvedResource.InformationModel)
                         {
-                            return (false, documentBundle, WrongInformationModel(resource.InformationModel, resolvedResource));
+                            return (false, everythingBundle, WrongInformationModel(resource.InformationModel, resolvedResource));
                         }
                            
-                        documentBundle = documentBundle.AddEntry(resolvedResource, referenceValue);
+                        everythingBundle = everythingBundle.AddEntry(resolvedResource, referenceValue);
                         includedReferences.Add(referenceValue);
                     }
                     else
@@ -173,13 +256,13 @@ namespace Vonk.Plugin.EverythingOperation
                     }
 
                     // Recursively resolve all references in the included resource
-                    (successfulResolve, documentBundle, error) = await IncludeReferencesInBundle(resolvedResource, documentBundle, includedReferences);
+                    (successfulResolve, everythingBundle, error) = await IncludeReferencesInBundle(resolvedResource, everythingBundle, includedReferences);
                     if(!successfulResolve){
                         break;
                     }
                 }
             }
-            return (successfulResolve, documentBundle, error);
+            return (successfulResolve, everythingBundle, error);
         }
 
         #region Helper - Bundle-related
@@ -202,6 +285,24 @@ namespace Vonk.Plugin.EverythingOperation
         #endregion Helper - Bundle-related
 
         #region Helper - Resolve resources
+
+        private async Task<(bool found, IEnumerable<IResource> resolvedResources)> ResourceHasPatientReference(IVonkContext vonkContext, string resourceType, string propertyName, string patientId)
+        {
+            bool found = false;
+
+            var searchArgs = new ArgumentCollection(
+                new Argument(ArgumentSource.Internal, ArgumentNames.resourceType, resourceType) { MustHandle = true },
+                new Argument(ArgumentSource.Internal, propertyName, $"Patient/{patientId}") { MustHandle = true }
+                );
+
+            var options = SearchOptions.Latest(vonkContext.ServerBase, vonkContext.Request.Interaction, vonkContext.InformationModel);
+
+            var searchResult = await _searchRepository.Search(searchArgs, options);
+            if (searchResult == null || searchResult.TotalCount == 0)
+                return (false, null);
+
+            return  (found, searchResult );
+        }
 
         private async Task<(bool success, IResource resolvedResource, VonkIssue failedReference)> ResolveResource(string id, string type)
         {

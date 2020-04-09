@@ -12,6 +12,7 @@ using Vonk.Core.Common;
 using Vonk.Core.Context;
 using Vonk.Core.ElementModel;
 using Vonk.Core.Metadata;
+using Vonk.Core.Model;
 using Vonk.Core.Repository;
 using Vonk.Fhir.R4;
 using Vonk.UnitTests.Framework.Helpers;
@@ -55,7 +56,54 @@ namespace Vonk.Plugin.EverythingOperation.Test
             var searchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
             _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(searchResult);
 
-            _modelService.Setup(model => model.CompartmentDefinitions.Select(c => c.CompartmentType.Equals(CompartmentType.Patient) ));
+            // Create VonkContext for $everything (GET / Instance level)
+            var testContext = new VonkTestContext(VonkInteraction.instance_custom);
+            testContext.Arguments.AddArguments(new[]
+            {
+                new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient"),
+                new Argument(ArgumentSource.Path, ArgumentNames.resourceId, "test")
+            });
+            testContext.TestRequest.CustomOperation = "everything";
+            testContext.TestRequest.Method = "GET";
+
+
+            VonkCompartmentDefinition componentDefinition = new VonkCompartmentDefinition() { CompartmentType = ResourceType.Patient.ToString(), InformationModel = patient.InformationModel };
+
+            List<VonkCompartmentDefinition> vonkCompartmentDefinitionList = new List<VonkCompartmentDefinition>() { componentDefinition };
+            //IModelService modelService = new IModelService() testContext.InformationModel, testContext.InformationModel, new List<string> { ResourceType.Patient.ToString() },
+            //    new Dictionary<string, string>(), new List<VonkSearchParameter>(), vonkCompartmentDefinitionList);
+
+            // Execute $everything
+            await _everythingService.PatientInstanceGET(testContext);
+
+            // Check response status
+            testContext.Response.HttpResult.Should().Be(StatusCodes.Status200OK, "$everything should succeed with HTTP 200 - OK on test patient");
+            testContext.Response.Payload.Should().NotBeNull();
+            var bundleType = testContext.Response.Payload.SelectText("type");
+            bundleType.Should().Be("searchset", "Bundle.type should be set to 'searchset'");
+            var bundle = testContext.Response.Payload.ToPoco<Bundle>();
+            bundle.Entry.Count.Should().Be(1);
+            bundle.Entry[0].Resource.ResourceType.Should().Be(ResourceType.Patient);
+            string bundleStr = FhirAsJsonString(testContext.Response.Payload);
+        }
+
+        [Fact]
+        public async Task EverythingOperationGETReturn200OnSuccess()
+        {
+            // Setup Patient resource
+            var patient = CreateTestPatientNoReferences();
+            string patientStr = FhirAsJsonString(patient);
+
+            var account = CreateTestAccountAndPatient();
+
+            var patSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
+            _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(patSearchResult);
+            var acctsearchResult = new SearchResult(new List<IResource>() { account }, 1, 1);
+            var searchArgs = new ArgumentCollection(
+                new Argument(ArgumentSource.Internal, ArgumentNames.resourceType, account.GetResourceTypeIndicator()) { MustHandle = true },
+                new Argument(ArgumentSource.Internal, "subject", $"Patient/{patient.Id}") { MustHandle = true }
+            );
+            _searchMock.Setup(repo => repo.Search(searchArgs, It.IsAny<SearchOptions>())).ReturnsAsync(acctsearchResult);
 
             // Create VonkContext for $everything (GET / Instance level)
             var testContext = new VonkTestContext(VonkInteraction.instance_custom);
@@ -348,6 +396,19 @@ namespace Vonk.Plugin.EverythingOperation.Test
         private IResource CreateTestPatientIncOrganization()
         {
             return new Patient() { Id = "test", VersionId = "v1", ManagingOrganization = new ResourceReference("Organization/org1") }.ToIResource();
+        }
+
+        private IResource CreateTestAccountAndPatient()
+        {
+            var account = new Account()
+            {
+                Id = "acct1",
+                VersionId = "v1",
+                Subject = { new ResourceReference("Patient/test") },
+                Name = "MyBillingAccount"
+            };
+
+            return account.ToIResource();
         }
 
         private IResource CreateTestIncOrginizationAndPractitioner()
