@@ -8,17 +8,21 @@
   <ItemGroup>
     <None Remove="CustomContentTypeMiddleware.cs.hold" />
     <None Remove="CompartmentPatientR4.json" />
-    <None Remove="CompartmentPatientR4 %28copy%29.json" />
+    <None Remove="CompartmentPatientR4test.json" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.3" />
     <PackageReference Include="Vonk.Core" Version="3.4.0" />
+    <PackageReference Include="Vonk.Fhir.R4" Version="3.4.0" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="CompartmentPatientR4.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="CompartmentPatientR4test.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -26,7 +30,7 @@
     <EmbeddedResource Include="CompartmentPatientR4.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
-    <EmbeddedResource Include="CompartmentPatientR4 %28copy%29.json">
+    <EmbeddedResource Include="CompartmentPatientR4test.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>

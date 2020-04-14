@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
 using Hl7.Fhir.ElementModel;
 using Hl7.Fhir.Model;
+using Hl7.Fhir.Rest;
 using Hl7.Fhir.Serialization;
 using Hl7.Fhir.Specification;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +46,94 @@ namespace Vonk.Plugin.EverythingOperation.Test
         public EverythingOperationTests()
         {
             _everythingService = new EverythingService(_searchMock.Object, _changeMock.Object, _schemaProvider, _logger, _modelService.Object);
+        }
+
+        [Fact]
+        public async Task VerifyServerMetaInfoForEverythingOperation()
+        {
+            string baseURL = "http://localhost:4080";
+
+            // Send metaprofile request to server to verify that the metadata contains the Patient-everywhere operation
+            var client = new FhirClient(baseURL);
+            client.PreferredFormat = ResourceFormat.Json;
+            client.UseFormatParam = true;
+
+            // Read the Vonk server's metadata (NOT working!! - getting error:
+            // System.NotSupportedException : Cannot read the conformance statement of the server to verify FHIR version compatibility
+            //var capabilityStatement = await client.CapabilityStatementAsync();
+            string metadata = $"{baseURL}/metadata";
+            var capabilityStatement = await client.GetAsync(metadata);
+            // Now checke that the "Patient-everything" operation is there
+            var everythigOperation = capabilityStatement.ToJObject();
+        }
+
+        [Fact]
+        public void BuildTestBundle()
+        {
+            var bundle = CreateBundle();
+
+            string patientId = "test";
+            var iResource = CreateTestPatientNoReferences(patientId);
+
+            var entry = new Bundle.EntryComponent();
+            var patient = PocoBuilderExtensions.ToPoco<Patient>(iResource);
+            entry.FullUrl = $"/{patient.ResourceType.ToString()}/{patientId}";
+            entry.Resource = patient;
+            entry.Request = new Bundle.RequestComponent()
+            {
+                Method = Bundle.HTTPVerb.PUT,
+                Url = entry.Resource.TypeName,
+                IfMatch = $"/{entry.Resource.TypeName}?identifier={patientId}"
+            };
+            //entry.Request = new Bundle.RequestComponent() { Method = Bundle.HTTPVerb.POST, Url = entry.Resource.TypeName, IfNoneExist = $"identifier={entry.FullUrl}" };
+            bundle.Entry.Add(entry);
+
+            string resourceId = "acct1";
+            iResource = CreateTestAccountForPatient(resourceId, patientId);
+            Account account = PocoBuilderExtensions.ToPoco<Account>(iResource);
+            entry = new Bundle.EntryComponent();
+            entry.FullUrl = $"/{account.ResourceType.ToString()}/{resourceId}";
+            entry.Resource = account;
+            entry.Request = new Bundle.RequestComponent()
+            {
+                Method = Bundle.HTTPVerb.PUT,
+                Url = entry.Resource.TypeName,
+                IfMatch = $"/{entry.Resource.TypeName}?identifier={resourceId}"
+            };
+            //entry.Request = new Bundle.RequestComponent() { Method = Bundle.HTTPVerb.POST, Url = entry.Resource.TypeName, IfNoneExist = $"identifier={entry.FullUrl}" };
+            bundle.Entry.Add(entry);
+
+            resourceId = "obs1";
+            iResource = CreateTestObservation(resourceId, "hr-code", 72, "bpm", patientId);
+            entry = new Bundle.EntryComponent();
+            Observation observation = PocoBuilderExtensions.ToPoco<Observation>(iResource);
+            entry.FullUrl = $"/{observation.ResourceType.ToString()}/{resourceId}";
+            entry.Resource = observation;
+            entry.Request = new Bundle.RequestComponent()
+            {
+                Method = Bundle.HTTPVerb.PUT,
+                Url = entry.Resource.TypeName,
+                IfMatch = $"/{entry.Resource.TypeName}?identifier={resourceId}"
+            };
+            //entry.Request = new Bundle.RequestComponent() { Method = Bundle.HTTPVerb.POST, Url = entry.Resource.TypeName, IfNoneExist = $"identifier={entry.FullUrl}" };
+            bundle.Entry.Add(entry);
+
+            resourceId = "obs2";
+            iResource = CreateTestObservation(resourceId, "temp-code", 36.8M, "C", patientId);
+            entry = new Bundle.EntryComponent();
+            observation = PocoBuilderExtensions.ToPoco<Observation>(iResource);
+            entry.FullUrl = $"/{observation.ResourceType.ToString()}/{resourceId}";
+            entry.Resource = observation;
+            entry.Request = new Bundle.RequestComponent()
+            {
+                Method = Bundle.HTTPVerb.PUT,
+                Url = entry.Resource.TypeName,
+                IfMatch = $"/{entry.Resource.TypeName}?identifier={resourceId}"
+            };
+            //entry.Request = new Bundle.RequestComponent() { Method = Bundle.HTTPVerb.POST, Url = entry.Resource.TypeName, IfNoneExist = $"identifier={entry.FullUrl}" };
+            bundle.Entry.Add(entry);
+
+            string bundleStr = FhirAsJsonString(bundle);
         }
 
         [Fact]
@@ -90,23 +180,31 @@ namespace Vonk.Plugin.EverythingOperation.Test
         [Fact]
         public async Task EverythingOperationGETReturn200OnSuccess()
         {
+            // Create VonkContext for $everything (GET / Instance level)
+            var testContext = new VonkTestContext(VonkInteraction.instance_custom);
+
             // Setup Patient resource
             var patient = CreateTestPatientNoReferences();
             string patientStr = FhirAsJsonString(patient);
 
-            var account = CreateTestAccountAndPatient();
+            var account = CreateTestAccountForPatient();
 
+            var searchOptions = SearchOptions.Latest(testContext.ServerBase, testContext.Request.Interaction, testContext.InformationModel);
             var patSearchResult = new SearchResult(new List<IResource>() { patient }, 1, 1);
-            _searchMock.Setup(repo => repo.Search(It.IsAny<IArgumentCollection>(), It.IsAny<SearchOptions>())).ReturnsAsync(patSearchResult);
-            var acctsearchResult = new SearchResult(new List<IResource>() { account }, 1, 1);
             var searchArgs = new ArgumentCollection(
+                new Argument(ArgumentSource.Internal, ArgumentNames.resourceType, patient.GetResourceTypeIndicator()) { MustHandle = true },
+                new Argument(ArgumentSource.Internal, ArgumentNames.resourceId, $"{patient.Id}") { MustHandle = true }
+            );
+            _searchMock.Setup(repo => repo.Search(searchArgs, searchOptions)).ReturnsAsync(patSearchResult);
+
+            var acctsearchResult = new SearchResult(new List<IResource>() { account }, 1, 1);
+            searchArgs = new ArgumentCollection(
                 new Argument(ArgumentSource.Internal, ArgumentNames.resourceType, account.GetResourceTypeIndicator()) { MustHandle = true },
                 new Argument(ArgumentSource.Internal, "subject", $"Patient/{patient.Id}") { MustHandle = true }
             );
-            _searchMock.Setup(repo => repo.Search(searchArgs, It.IsAny<SearchOptions>())).ReturnsAsync(acctsearchResult);
 
-            // Create VonkContext for $everything (GET / Instance level)
-            var testContext = new VonkTestContext(VonkInteraction.instance_custom);
+            _searchMock.Setup(repo => repo.Search(searchArgs, searchOptions)).ReturnsAsync(acctsearchResult);
+
             testContext.Arguments.AddArguments(new[]
             {
                 new Argument(ArgumentSource.Path, ArgumentNames.resourceType, "Patient"),
@@ -383,9 +481,13 @@ namespace Vonk.Plugin.EverythingOperation.Test
         // $everything is expected to fail if a resource reference is missing, this should be checked on all levels of recursion.
         // Therefore, we build multiple resources, each with different unresolvable references
 
-        private IResource CreateTestPatientNoReferences()
+        private IResource CreateTestPatientNoReferences(string id = "test")
         {
-            return new Patient() { Id = "test", VersionId = "v1" }.ToIResource();
+            return new Patient() {
+                //Id = id,
+                VersionId = "v1",
+                Identifier = new List<Identifier>() { new Identifier("PAT-SYS", id) },
+            }.ToIResource();
         }
 
         private IResource CreateTestPatientAbsoulteReferences()
@@ -398,13 +500,15 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Patient() { Id = "test", VersionId = "v1", ManagingOrganization = new ResourceReference("Organization/org1") }.ToIResource();
         }
 
-        private IResource CreateTestAccountAndPatient()
+        private IResource CreateTestAccountForPatient(string id = "acct1", string patientRef = "test")
         {
             var account = new Account()
             {
-                Id = "acct1",
+                //Id = id,
+                Identifier = new List<Identifier>() { new Identifier("ACCT-SYS", id) },
+                Status = Account.AccountStatus.Active,
                 VersionId = "v1",
-                Subject = { new ResourceReference("Patient/test") },
+                Subject = { new ResourceReference($"Patient/{patientRef}") },
                 Name = "MyBillingAccount"
             };
 
@@ -444,6 +548,23 @@ namespace Vonk.Plugin.EverythingOperation.Test
             return new Organization { Id = "org1", Name = "MyVonkTestOrg" }.ToIResource();
         }
 
+        private IResource CreateTestObservation(string id, string code, decimal value, string unit, string patientRef)
+        {
+            Element valueQuantity = new Quantity(value, unit);
+            var observation = new Observation()
+            {
+                //Id = id,
+                Identifier = new List<Identifier>() { new Identifier("Obs-Id", id) },
+                Subject = new ResourceReference($"Patient/{patientRef}"),
+                Status = ObservationStatus.Final,
+                Code = new CodeableConcept("loinc", code),
+                Value = valueQuantity,
+                // can't get Value set to valueQuantity
+                //Value = new QuantityValue()
+            }.ToIResource();
+            return observation;
+        }
+
         private IResource CreateTestPractitioner(string id = "gp1")
         {
             HumanName humanName = new HumanName() { Family = "Prac", Given = new List<string>() { "James" }, Prefix = new List<string>() { "Dr." } };
@@ -455,9 +576,18 @@ namespace Vonk.Plugin.EverythingOperation.Test
             }.ToIResource();
         }
 
-        private IResource CreateBundle()
+        private Bundle CreateBundle(Bundle.BundleType? bundleType = Bundle.BundleType.Transaction)
         {
-            return new Bundle() { Id = "test", VersionId = "v1" }.ToIResource();
+            return new Bundle() { Id = "test", VersionId = "v1", Type = bundleType };
+        }
+
+        private string FhirAsJsonString(Bundle bundle)
+        {
+            var serializer = new FhirJsonSerializer(new SerializerSettings()
+            {
+                Pretty = true
+            });
+            return serializer.SerializeToString(bundle);
         }
 
         private string FhirAsJsonString(IResource fhirObj)
