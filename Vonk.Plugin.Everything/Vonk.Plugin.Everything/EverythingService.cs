@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Hl7.Fhir.ElementModel;
 using Hl7.Fhir.Specification;
@@ -45,9 +46,10 @@ namespace Vonk.Plugin.EverythingOperation
             _modelService = modelService;
             _logger = logger;
 
-            _compartmentPatient = JObject.Parse(File.ReadAllText(@"CompartmentPatientR4.json"));
+            _compartmentPatient = JObject.Parse(ReadResourceFile("CompartmentPatientR4.json"));
+            //_compartmentPatient = JObject.Parse(File.ReadAllText("CompartmentPatientR4.json"));
             _patientSearchList = _compartmentPatient.SelectTokens("$.resource[?(@.param)]").ToList<JToken>();
-
+            _logger.LogInformation($"Loaded patient-related resources, count: {_patientSearchList.Count}");
         }
 
         /// <summary>
@@ -58,6 +60,7 @@ namespace Vonk.Plugin.EverythingOperation
         public async Task PatientInstanceGET(IVonkContext vonkContext)
         {
             var patientID = vonkContext.Arguments.ResourceIdArgument().ArgumentValue;
+            _logger.LogInformation($"Attempting to find all patient-related resources for patientId: {patientID}");
             await FindPatientReferencedResources(vonkContext, patientID);
             //await EverythingBundle(vonkContext, patientID);
         }
@@ -142,14 +145,13 @@ namespace Vonk.Plugin.EverythingOperation
                 }
 
                 // Include Patient resource in search results
-                everythingBundle = everythingBundle.AddEntry(resolvedResource, "Patient/" + patientID);
+                everythingBundle = everythingBundle.AddEntry(resolvedResource, $"Patient/{patientID}");
 
                 IEnumerable<IResource> resources = new List<IResource>();
 
                 foreach (var token in _patientSearchList)
                 {
                     bool found = false;
-                    resources = new List<IResource>();
 
                     var resourceName = token["code"].Value<string>();
                     var param = token["param"].Values<string>();
@@ -157,12 +159,16 @@ namespace Vonk.Plugin.EverythingOperation
                     foreach (string propName in param)
                     {
                         (found, resources) = await ResourceHasPatientReference(vonkContext, resourceName, propName, patientID);
-                        Console.WriteLine($"Found: {found}, Count: {resources.Count()} resources for [Resource: {resourceName}, PropertyName: {propName} ");
 
-                        foreach (var resource in resources)
+                        if (found)
                         {
-                            // add resources to bundle
-                            everythingBundle.Add(resource);
+                            _logger.LogInformation($"Found: {found}, Count: {resources.Count()} resources for [Resource: {resourceName}, PropertyName: {propName}");
+
+                            foreach (var resource in resources)
+                            {
+                                // add resources to bundle
+                                everythingBundle = everythingBundle.AddEntry(resource, $"{resourceName}/{resource.Id}");
+                            }
                         }
                     }
                 }
@@ -288,8 +294,6 @@ namespace Vonk.Plugin.EverythingOperation
 
         private async Task<(bool found, IEnumerable<IResource> resolvedResources)> ResourceHasPatientReference(IVonkContext vonkContext, string resourceType, string propertyName, string patientId)
         {
-            bool found = false;
-
             var searchArgs = new ArgumentCollection(
                 new Argument(ArgumentSource.Internal, ArgumentNames.resourceType, resourceType) { MustHandle = true },
                 new Argument(ArgumentSource.Internal, propertyName, $"Patient/{patientId}") { MustHandle = true }
@@ -301,7 +305,7 @@ namespace Vonk.Plugin.EverythingOperation
             if (searchResult == null || searchResult.TotalCount == 0)
                 return (false, null);
 
-            return  (found, searchResult );
+            return  (searchResult.TotalCount > 0, searchResult );
         }
 
         private async Task<(bool success, IResource resolvedResource, VonkIssue failedReference)> ResolveResource(string id, string type)
@@ -373,5 +377,13 @@ namespace Vonk.Plugin.EverythingOperation
             return new VonkIssue(VonkIssue.PROCESSING_ERROR.Severity, VonkIssue.PROCESSING_ERROR.IssueType, details: $"Found {resolvedResource.Type}/{resolvedResource.Id} in information model {resolvedResource.InformationModel}. Expected information model {expectedInformationModel} instead.");
         }
 
+        #region Utility
+        private string ReadResourceFile(string fileName)
+        {
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            StreamReader reader = new StreamReader(assembly.GetManifestResourceStream($"{assembly.GetName().Name}.{fileName}"));
+            return reader.ReadToEnd();
+        }
+        #endregion Utility
     }
 }
