@@ -1,0 +1,155 @@
+{
+	"info": {
+		"_postman_id": "5cdff989-7d89-4fb6-af03-6e72bd30bfb6",
+		"name": "Vonk.EverywhereOperation",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "PatientBundle",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"resourceType\": \"Bundle\",\n  \"id\": \"test\",\n  \"meta\": {\n    \"versionId\": \"v1\"\n  },\n  \"type\": \"transaction\",\n  \"entry\": [\n    {\n      \"fullUrl\": \"/Patient/test\",\n      \"resource\": {\n        \"resourceType\": \"Patient\",\n        \"meta\": {\n          \"versionId\": \"v1\"\n        },\n        \"identifier\": [\n          {\n            \"system\": \"PAT-SYS\",\n            \"value\": \"test\"\n          }\n        ]\n      },\n      \"request\": {\n        \"method\": \"PUT\",\n        \"url\": \"Patient\",\n        \"ifMatch\": \"/Patient?identifier=test\"\n      }\n    },\n    {\n      \"fullUrl\": \"/Account/acct1\",\n      \"resource\": {\n        \"resourceType\": \"Account\",\n        \"meta\": {\n          \"versionId\": \"v1\"\n        },\n        \"identifier\": [\n          {\n            \"system\": \"ACCT-SYS\",\n            \"value\": \"acct1\"\n          }\n        ],\n        \"status\": \"active\",\n        \"name\": \"MyBillingAccount\",\n        \"subject\": [\n          {\n            \"reference\": \"Patient/test\"\n          }\n        ]\n      },\n      \"request\": {\n        \"method\": \"PUT\",\n        \"url\": \"Account\",\n        \"ifMatch\": \"/Account?identifier=acct1\"\n      }\n    },\n    {\n      \"fullUrl\": \"/Observation/obs1\",\n      \"resource\": {\n        \"resourceType\": \"Observation\",\n        \"identifier\": [\n          {\n            \"system\": \"Obs-Id\",\n            \"value\": \"obs1\"\n          }\n        ],\n        \"status\": \"final\",\n        \"code\": {\n          \"coding\": [\n            {\n              \"system\": \"loinc\",\n              \"code\": \"hr-code\"\n            }\n          ]\n        },\n        \"subject\": {\n          \"reference\": \"Patient/test\"\n        },\n        \"valueQuantity\": {\n          \"value\": 78,\n          \"unit\": \"BPM\",\n          \"system\": \"http://unitsofmeasure.org\",\n          \"code\": \"{beats}/min\"\n        }\n      },\n      \"request\": {\n        \"method\": \"PUT\",\n        \"url\": \"Observation\",\n        \"ifMatch\": \"Observation?identifier=obs1\"\n      }\n    },\n    {\n      \"fullUrl\": \"/Observation/obs2\",\n      \"resource\": {\n        \"resourceType\": \"Observation\",\n        \"identifier\": [\n          {\n            \"system\": \"Obs-Id\",\n            \"value\": \"obs2\"\n          }\n        ],\n        \"status\": \"final\",\n        \"code\": {\n          \"coding\": [\n            {\n              \"system\": \"loinc\",\n              \"code\": \"temp-code\"\n            }\n          ]\n        },\n        \"subject\": {\n          \"reference\": \"Patient/test\"\n        },\n        \"valueQuantity\": {\n          \"value\": 33.4,\n          \"unit\": \"C\",\n          \"system\": \"http://unitsofmeasure.org\",\n          \"code\": \"C\"\n        }\n      },\n      \"request\": {\n        \"method\": \"PUT\",\n        \"url\": \"Observation\",\n        \"ifMatch\": \"/Observation?identifier=obs2\"\n      }\n    }\n  ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:4080/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						""
+					]
+				},
+				"description": "Patient bundle for $everything operation on Vonk plugin"
+			},
+			"response": []
+		},
+		{
+			"name": "TestBundle",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": ""
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "MetaInfo",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4080/metadata",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						"metadata"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetPatients",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4080/Patient/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						"Patient",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetPatientTest$Everything",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4080/Patient/998fa93f-2338-4d89-b213-f72c103a74d2?$everything",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						"Patient",
+						"998fa93f-2338-4d89-b213-f72c103a74d2"
+					],
+					"query": [
+						{
+							"key": "$everything",
+							"value": null
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetObservations",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4080/Observation/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						"Observation",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ResetDatabase",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:4080/administration/reset",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "4080",
+					"path": [
+						"administration",
+						"reset"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}
